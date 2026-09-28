@@ -1,0 +1,39 @@
+[project]
+name = "itg-fastapi-churn"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "imiderji", email = "skishou.developer@yandex.ru" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+itg-fastapi-churn = "itg_fastapi_churn.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.10,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 79
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["itg_fastapi_churn"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.8",
+    "ty>=0.0.83",
+]
