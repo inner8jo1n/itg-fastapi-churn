@@ -7,7 +7,12 @@ authors = [
     { name = "imiderji", email = "skishou.developer@yandex.ru" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.141.1",
+    "pandas>=3.0.6",
+    "pydantic-settings>=2.15.0",
+    "uvicorn[standard]>=0.54.0",
+]
 
 [project.scripts]
 itg-fastapi-churn = "itg_fastapi_churn.cli:main"
@@ -32,6 +37,8 @@ known-first-party = ["itg_fastapi_churn"]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.1",
+    "pandas-stubs>=3.0.5.260914",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.8",

@@ -1,4 +1,7 @@
-.PHONY: test lint format typecheck check
+.PHONY: run test lint format typecheck check
+
+run:
+	uv run uvicorn itg_fastapi_churn.main:app --reload
 
 test:
 	uv run pytest
