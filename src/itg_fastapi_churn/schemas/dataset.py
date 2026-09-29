@@ -15,3 +15,19 @@ class DatasetInfo(BaseModel):
     n_columns: int
     feature_names: list[str]
     churn_distribution: dict[int, int]
+
+
+class SplitInfo(BaseModel):
+    """
+    Summary of the train/test split
+
+    :train_rows: int - number of rows in the train part
+    :test_rows: int - number of rows in the test part
+    :train_churn_distribution: dict[int, int] - rows per churn class in train
+    :test_churn_distribution: dict[int, int] - rows per churn class in test
+    """
+
+    train_rows: int
+    test_rows: int
+    train_churn_distribution: dict[int, int]
+    test_churn_distribution: dict[int, int]

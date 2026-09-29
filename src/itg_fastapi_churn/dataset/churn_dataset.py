@@ -1,11 +1,8 @@
-from typing import cast
-
 import pandas as pd
 
+from itg_fastapi_churn.ml.features import TARGET_COLUMN, class_distribution
 from itg_fastapi_churn.schemas.churn import DatasetRowChurn
 from itg_fastapi_churn.schemas.dataset import DatasetInfo
-
-TARGET_COLUMN = "churn"
 
 
 class ChurnDataset:
@@ -20,6 +17,24 @@ class ChurnDataset:
         :data: pd.DataFrame - dataset rows matching DatasetRowChurn
         """
         self._data = data
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        Copy of the dataset, so callers cannot change the wrapped data
+
+        :return: dataset rows as a new DataFrame
+        """
+        return self._data.copy()
+
+    @property
+    def is_empty(self) -> bool:
+        """
+        Tell whether the dataset has no rows
+
+        :return: True if there are no rows
+        """
+        return self._data.empty
 
     def preview(self, n: int) -> list[DatasetRowChurn]:
         """
@@ -45,10 +60,7 @@ class ChurnDataset:
         feature_names = [
             column for column in self._data.columns if column != TARGET_COLUMN
         ]
-        churn_distribution = cast(
-            dict[int, int],
-            self._data[TARGET_COLUMN].value_counts().sort_index().to_dict(),
-        )
+        churn_distribution = class_distribution(self._data[TARGET_COLUMN])
 
         return DatasetInfo(
             n_rows=n_rows,

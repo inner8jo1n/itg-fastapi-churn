@@ -25,5 +25,6 @@ make check         # lint + format check + type check + tests
 | `make test` | run pytest |
 | `make lint` | run ruff check |
 | `make format` | run ruff format |
+| `make fix` | auto-fix lint issues (imports etc.) and format |
 | `make typecheck` | run ty check |
 | `make check` | run `scripts/check.sh` (all of the above) |

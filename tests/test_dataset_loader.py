@@ -44,3 +44,22 @@ def test_load_dataset_raises_for_missing_file(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError):
         load_dataset(path)
+
+
+def test_load_dataset_keeps_columns_when_no_rows(tmp_path: Path) -> None:
+    path = write_csv(tmp_path)
+
+    df = load_dataset(path)
+
+    assert len(df) == 0
+    assert list(df.columns) == HEADER.split(",")
+
+
+def test_load_dataset_handles_empty_file(tmp_path: Path) -> None:
+    path = tmp_path / "empty.csv"
+    path.write_text("")
+
+    df = load_dataset(path)
+
+    assert len(df) == 0
+    assert list(df.columns) == HEADER.split(",")

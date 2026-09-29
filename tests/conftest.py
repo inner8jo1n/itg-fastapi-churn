@@ -29,3 +29,13 @@ def dataset() -> ChurnDataset:
             ]
         )
     )
+
+
+@pytest.fixture
+def training_dataset() -> ChurnDataset:
+    churn_values = [0] * 16 + [1] * 4
+    rows = [
+        {**EXAMPLE_FEATURES, "churn": churn, "failed_payments": churn * 5}
+        for churn in churn_values
+    ]
+    return ChurnDataset(pd.DataFrame(rows))

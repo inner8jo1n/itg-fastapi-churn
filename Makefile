@@ -1,4 +1,4 @@
-.PHONY: run test lint format typecheck check
+.PHONY: run test lint format fix typecheck check
 
 run:
 	uv run uvicorn itg_fastapi_churn.main:app --reload
@@ -10,6 +10,10 @@ lint:
 	uv run ruff check .
 
 format:
+	uv run ruff format .
+
+fix:
+	uv run ruff check --fix .
 	uv run ruff format .
 
 typecheck:

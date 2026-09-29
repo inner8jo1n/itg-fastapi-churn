@@ -1,3 +1,5 @@
+import pandas as pd
+
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
 
@@ -24,3 +26,18 @@ def test_info_describes_dataset(dataset: ChurnDataset) -> None:
     assert info.n_columns == 10
     assert info.feature_names == list(EXAMPLE_FEATURES)
     assert info.churn_distribution == {0: 2, 1: 1}
+
+
+def test_data_returns_copy(dataset: ChurnDataset) -> None:
+    data = dataset.data
+    data.drop(data.index, inplace=True)
+
+    assert len(dataset.data) == 3
+
+
+def test_is_empty_false_for_dataset_with_rows(dataset: ChurnDataset) -> None:
+    assert not dataset.is_empty
+
+
+def test_is_empty_true_for_dataset_without_rows() -> None:
+    assert ChurnDataset(pd.DataFrame()).is_empty

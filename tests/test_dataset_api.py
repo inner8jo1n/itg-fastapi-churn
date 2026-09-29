@@ -51,3 +51,20 @@ def test_dataset_returns_404_when_file_missing(
     response = client.get("/dataset/info")
 
     assert response.status_code == 404
+
+
+def test_split_info_returns_sizes_and_balance(
+    app: FastAPI, client: TestClient, training_dataset: ChurnDataset
+) -> None:
+    app.dependency_overrides[get_dataset] = lambda: training_dataset
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        test_size=0.25, random_state=0
+    )
+
+    response = client.get("/dataset/split-info")
+
+    assert response.status_code == 200
+    assert response.json()["train_rows"] == 15
+    assert response.json()["test_rows"] == 5
+    assert response.json()["train_churn_distribution"] == {"0": 12, "1": 3}
+    assert response.json()["test_churn_distribution"] == {"0": 4, "1": 1}

@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from itg_fastapi_churn.api.dependencies import DatasetDep
+from itg_fastapi_churn.api.dependencies import DatasetDep, SplitDep
 from itg_fastapi_churn.schemas.churn import DatasetRowChurn
-from itg_fastapi_churn.schemas.dataset import DatasetInfo
+from itg_fastapi_churn.schemas.dataset import DatasetInfo, SplitInfo
 
 router = APIRouter(prefix="/dataset", tags=["dataset"])
 
@@ -35,3 +35,15 @@ def get_dataset_info(dataset: DatasetDep) -> DatasetInfo:
     :return: dataset size, feature names and churn class balance
     """
     return dataset.info()
+
+
+@router.get("/split-info")
+def get_split_info(split: SplitDep) -> SplitInfo:
+    """
+    Show the train/test split sizes and churn class balance
+
+    :split: DatasetSplit - stratified train/test split
+
+    :return: sizes and churn distribution of both parts
+    """
+    return split.info()
