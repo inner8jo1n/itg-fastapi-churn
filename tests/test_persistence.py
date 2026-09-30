@@ -57,3 +57,29 @@ def test_load_rejects_unexpected_object(tmp_path: Path) -> None:
 
     with pytest.raises(ModelLoadError):
         load_churn_model(path)
+
+
+def test_saved_model_keeps_type_and_hyperparameters(
+    trained_model: TrainedModel, tmp_path: Path
+) -> None:
+    path = tmp_path / "model.joblib"
+
+    save_churn_model(trained_model, path)
+    loaded = load_churn_model(path)
+
+    assert loaded is not None
+    assert loaded.model_type == trained_model.model_type
+    assert loaded.hyperparameters == trained_model.hyperparameters
+
+
+def test_load_rejects_model_saved_by_older_version(
+    trained_model: TrainedModel, tmp_path: Path
+) -> None:
+    path = tmp_path / "model.joblib"
+    old_model = object.__new__(TrainedModel)
+    for name in ("pipeline", "trained_at", "metrics"):
+        object.__setattr__(old_model, name, getattr(trained_model, name))
+    joblib.dump(old_model, path)
+
+    with pytest.raises(ModelLoadError, match="model_type, hyperparameters"):
+        load_churn_model(path)

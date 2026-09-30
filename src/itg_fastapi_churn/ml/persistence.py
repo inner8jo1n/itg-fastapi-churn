@@ -1,11 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
 from pathlib import Path
 
 import joblib
+from pydantic import JsonValue
 from sklearn.pipeline import Pipeline
 
 from itg_fastapi_churn.schemas.model import ModelMetrics
+from itg_fastapi_churn.schemas.training import ModelType
 
 
 class ModelLoadError(Exception):
@@ -22,11 +24,16 @@ class TrainedModel:
     :pipeline: Pipeline - fitted churn pipeline
     :trained_at: datetime - moment the training finished
     :metrics: ModelMetrics - quality on the test split
+    :model_type: ModelType - type of the trained classifier
+    :hyperparameters: dict[str, JsonValue] - hyperparameters the
+        classifier was trained with, defaults included
     """
 
     pipeline: Pipeline
     trained_at: datetime
     metrics: ModelMetrics
+    model_type: ModelType
+    hyperparameters: dict[str, JsonValue]
 
 
 def save_churn_model(model: TrainedModel, path: Path) -> None:
@@ -68,5 +75,16 @@ def load_churn_model(path: Path) -> TrainedModel | None:
 
     if not isinstance(loaded, TrainedModel):
         raise ModelLoadError(f"Model file {path} has unexpected content")
+
+    missing = [
+        field.name
+        for field in fields(TrainedModel)
+        if not hasattr(loaded, field.name)
+    ]
+    if missing:
+        raise ModelLoadError(
+            f"Model file {path} was saved by an older version, "
+            f"missing: {', '.join(missing)}"
+        )
 
     return loaded

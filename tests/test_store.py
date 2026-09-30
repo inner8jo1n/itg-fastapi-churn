@@ -85,3 +85,15 @@ def test_parallel_saves_keep_memory_and_disk_in_sync(
     assert store.current is not None
     assert saved.trained_at == store.current.trained_at
     assert [file.name for file in tmp_path.iterdir()] == ["model.joblib"]
+
+
+def test_status_shows_model_type_and_hyperparameters(
+    trained_model: TrainedModel, tmp_path: Path
+) -> None:
+    store = ModelStore(tmp_path / "model.joblib")
+    store.save(trained_model)
+
+    status = store.status()
+
+    assert status.model_type == trained_model.model_type
+    assert status.hyperparameters == trained_model.hyperparameters

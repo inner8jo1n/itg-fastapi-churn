@@ -68,7 +68,8 @@ class ModelStore:
         """
         Describe the current model
 
-        :return: whether a model exists, when it was trained and its metrics
+        :return: whether a model exists, when it was trained, its metrics,
+            type and hyperparameters
         """
         model = self._model
         if model is None:
@@ -78,4 +79,6 @@ class ModelStore:
             is_trained=True,
             trained_at=model.trained_at,
             metrics=model.metrics,
+            model_type=model.model_type,
+            hyperparameters=model.hyperparameters,
         )

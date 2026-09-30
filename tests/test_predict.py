@@ -21,7 +21,7 @@ RISKY_CLIENT = FeatureVectorChurn.model_validate(
 @pytest.fixture
 def pipeline(training_dataset: ChurnDataset) -> Pipeline:
     features, target = prepare_data(training_dataset.data)
-    return train_churn_model(features, target)
+    return train_churn_model(features, target).pipeline
 
 
 def test_predict_churn_keeps_client_order(pipeline: Pipeline) -> None:

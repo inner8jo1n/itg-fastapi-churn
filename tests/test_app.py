@@ -34,6 +34,8 @@ def test_app_starts_without_saved_model(tmp_path: Path) -> None:
         "is_trained": False,
         "trained_at": None,
         "metrics": None,
+        "model_type": None,
+        "hyperparameters": None,
     }
 
 

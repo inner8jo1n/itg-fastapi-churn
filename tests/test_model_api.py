@@ -90,6 +90,8 @@ def test_status_reports_untrained_model(client: TestClient) -> None:
         "is_trained": False,
         "trained_at": None,
         "metrics": None,
+        "model_type": None,
+        "hyperparameters": None,
     }
 
 
@@ -104,13 +106,16 @@ def test_train_model_saves_model_and_updates_status(
         test_size=0.25, random_state=0
     )
 
-    metrics = client.post("/model/train").json()
+    trained = client.post("/model/train").json()
     status = client.get("/model/status").json()
 
     assert (tmp_path / "model.joblib").exists()
     assert status["is_trained"]
     assert status["trained_at"] is not None
-    assert status["metrics"] == metrics
+    assert status["metrics"] == {
+        "accuracy": trained["accuracy"],
+        "f1": trained["f1"],
+    }
 
 
 def test_failed_training_keeps_model_untrained(
@@ -124,3 +129,89 @@ def test_failed_training_keeps_model_untrained(
     status = client.get("/model/status").json()
 
     assert not status["is_trained"]
+
+
+@pytest.fixture
+def train_ready_app(app: FastAPI, training_dataset: ChurnDataset) -> None:
+    app.dependency_overrides[get_dataset] = lambda: training_dataset
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        test_size=0.25, random_state=0
+    )
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_without_body_uses_logreg(client: TestClient) -> None:
+    client.post("/model/train")
+    status = client.get("/model/status").json()
+
+    assert status["model_type"] == "logreg"
+    assert status["hyperparameters"]["class_weight"] == "balanced"
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_random_forest_with_hyperparameters(client: TestClient) -> None:
+    config = {
+        "model_type": "random_forest",
+        "hyperparameters": {"n_estimators": 10, "max_depth": 3},
+    }
+
+    response = client.post("/model/train", json=config)
+    status = client.get("/model/status").json()
+
+    assert response.status_code == 200
+    assert status["model_type"] == "random_forest"
+    assert status["hyperparameters"]["n_estimators"] == 10
+    assert status["hyperparameters"]["max_depth"] == 3
+
+
+@pytest.mark.parametrize(
+    ("hyperparameters", "wrong_name"),
+    [({"n_trees": 5}, "n_trees"), ({"C": -1}, "'C'")],
+)
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_rejects_bad_hyperparameters(
+    client: TestClient,
+    hyperparameters: dict[str, int],
+    wrong_name: str,
+) -> None:
+    response = client.post(
+        "/model/train", json={"hyperparameters": hyperparameters}
+    )
+
+    assert response.status_code == 422
+    assert wrong_name in response.json()["detail"]
+    assert not client.get("/model/status").json()["is_trained"]
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_rejects_unknown_model_type(client: TestClient) -> None:
+    response = client.post("/model/train", json={"model_type": "svm"})
+
+    assert response.status_code == 422
+
+
+def test_train_docs_show_config_examples(client: TestClient) -> None:
+    operation = client.get("/openapi.json").json()["paths"]["/model/train"]
+    body = operation["post"]["requestBody"]["content"]["application/json"]
+
+    assert set(body["examples"]) == {"logreg", "random_forest"}
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_returns_training_warnings(client: TestClient) -> None:
+    response = client.post(
+        "/model/train", json={"hyperparameters": {"max_iter": 1}}
+    )
+
+    assert response.status_code == 200
+    [warning] = response.json()["warnings"]
+    assert "failed to converge" in warning
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_without_problems_returns_no_warnings(
+    client: TestClient,
+) -> None:
+    response = client.post("/model/train")
+
+    assert response.json()["warnings"] == []

@@ -14,6 +14,7 @@ from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.ml.store import ModelStore
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
 from itg_fastapi_churn.schemas.model import ModelMetrics
+from itg_fastapi_churn.schemas.training import ModelType
 
 
 @pytest.fixture
@@ -66,4 +67,6 @@ def trained_model() -> TrainedModel:
         pipeline=pipeline,
         trained_at=datetime(2026, 1, 1, tzinfo=UTC),
         metrics=ModelMetrics(accuracy=0.5, f1=0.4),
+        model_type=ModelType.LOGREG,
+        hyperparameters={"C": 0.5},
     )
