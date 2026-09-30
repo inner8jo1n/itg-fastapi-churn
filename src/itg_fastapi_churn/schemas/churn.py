@@ -30,6 +30,7 @@ class FeatureVectorChurn(BaseModel):
     """
 
     model_config = ConfigDict(
+        allow_inf_nan=False,
         json_schema_extra={"examples": [EXAMPLE_FEATURES]},
     )
 

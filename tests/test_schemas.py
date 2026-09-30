@@ -39,3 +39,18 @@ def test_dataset_row_includes_churn_target() -> None:
 def test_dataset_row_rejects_non_binary_churn() -> None:
     with pytest.raises(ValidationError):
         DatasetRowChurn.model_validate({**EXAMPLE_FEATURES, "churn": 3})
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("nan")])
+def test_feature_vector_rejects_non_finite_numbers(value: float) -> None:
+    with pytest.raises(ValidationError):
+        FeatureVectorChurn.model_validate(
+            {**EXAMPLE_FEATURES, "usage_hours": value}
+        )
+
+
+def test_dataset_row_rejects_non_finite_numbers() -> None:
+    with pytest.raises(ValidationError):
+        DatasetRowChurn.model_validate(
+            {**EXAMPLE_FEATURES, "usage_hours": float("inf"), "churn": 0}
+        )
