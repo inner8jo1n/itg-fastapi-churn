@@ -184,6 +184,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "joblib" },
     { name = "pandas" },
     { name = "pydantic-settings" },
     { name = "scikit-learn" },
@@ -203,6 +204,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "joblib", specifier = ">=1.6.0" },
     { name = "pandas", specifier = ">=3.0.6" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "scikit-learn", specifier = ">=1.9.1" },

@@ -12,12 +12,14 @@ def test_settings_use_defaults(
     monkeypatch.delenv("CHURN_DATASET_PATH", raising=False)
     monkeypatch.delenv("CHURN_TEST_SIZE", raising=False)
     monkeypatch.delenv("CHURN_RANDOM_STATE", raising=False)
+    monkeypatch.delenv("CHURN_MODEL_PATH", raising=False)
 
     settings = Settings()
 
     assert settings.dataset_path == Path("data/churn_dataset.csv")
     assert settings.test_size == 0.2
     assert settings.random_state == 42
+    assert settings.model_path == Path("models/churn_model.joblib")
 
 
 def test_settings_read_dataset_path_from_env(

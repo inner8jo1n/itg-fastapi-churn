@@ -80,3 +80,47 @@ def test_train_model_rejects_too_small_dataset(
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Not enough rows to split the dataset"
+
+
+def test_status_reports_untrained_model(client: TestClient) -> None:
+    response = client.get("/model/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "is_trained": False,
+        "trained_at": None,
+        "metrics": None,
+    }
+
+
+def test_train_model_saves_model_and_updates_status(
+    app: FastAPI,
+    client: TestClient,
+    training_dataset: ChurnDataset,
+    tmp_path: Path,
+) -> None:
+    app.dependency_overrides[get_dataset] = lambda: training_dataset
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        test_size=0.25, random_state=0
+    )
+
+    metrics = client.post("/model/train").json()
+    status = client.get("/model/status").json()
+
+    assert (tmp_path / "model.joblib").exists()
+    assert status["is_trained"]
+    assert status["trained_at"] is not None
+    assert status["metrics"] == metrics
+
+
+def test_failed_training_keeps_model_untrained(
+    app: FastAPI, client: TestClient
+) -> None:
+    app.dependency_overrides[get_dataset] = lambda: ChurnDataset(
+        pd.DataFrame()
+    )
+
+    client.post("/model/train")
+    status = client.get("/model/status").json()
+
+    assert not status["is_trained"]

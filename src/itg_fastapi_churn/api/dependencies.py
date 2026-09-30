@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 
 from itg_fastapi_churn.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.dataset.loader import load_dataset
 from itg_fastapi_churn.ml.features import prepare_data
 from itg_fastapi_churn.ml.split import DatasetSplit, split_dataset
+from itg_fastapi_churn.ml.store import ModelStore
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -74,3 +75,17 @@ def get_split(dataset: DatasetDep, settings: SettingsDep) -> DatasetSplit:
 
 
 SplitDep = Annotated[DatasetSplit, Depends(get_split)]
+
+
+def get_model_store(request: Request) -> ModelStore:
+    """
+    Give access to the model store shared by the whole application
+
+    :request: Request - current request
+
+    :return: application model store
+    """
+    return request.app.state.model_store
+
+
+ModelStoreDep = Annotated[ModelStore, Depends(get_model_store)]

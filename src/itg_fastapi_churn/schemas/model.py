@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -11,3 +13,17 @@ class ModelMetrics(BaseModel):
 
     accuracy: float
     f1: float
+
+
+class ModelStatus(BaseModel):
+    """
+    Whether a trained model is available and how it performed
+
+    :is_trained: bool - True if a model is loaded or has been trained
+    :trained_at: datetime | None - moment of the last training
+    :metrics: ModelMetrics | None - quality on the test split
+    """
+
+    is_trained: bool
+    trained_at: datetime | None = None
+    metrics: ModelMetrics | None = None
