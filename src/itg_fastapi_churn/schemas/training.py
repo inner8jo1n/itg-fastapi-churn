@@ -33,9 +33,13 @@ class TrainingConfigChurn(BaseModel):
     :model_type: ModelType - classifier to train
     :hyperparameters: dict[str, JsonValue] - scikit-learn parameters
         of the classifier; they override the service defaults
+
+    Unknown fields are rejected, so a misspelled field fails instead of
+    silently training a default model.
     """
 
     model_config = ConfigDict(
+        extra="forbid",
         json_schema_extra={
             "examples": [LOGREG_CONFIG_EXAMPLE, RANDOM_FOREST_CONFIG_EXAMPLE]
         },

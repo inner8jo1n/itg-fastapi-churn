@@ -12,6 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from itg_fastapi_churn.errors import InvalidHyperparametersError
 from itg_fastapi_churn.ml.features import (
     CATEGORICAL_FEATURES,
     NUMERIC_FEATURES,
@@ -47,12 +48,6 @@ class TrainingOutcome:
 
     pipeline: Pipeline
     warnings: list[str]
-
-
-class InvalidHyperparametersError(ValueError):
-    """
-    Hyperparameters do not fit the chosen classifier
-    """
 
 
 def resolve_hyperparameters(
@@ -148,6 +143,10 @@ def build_pipeline(classifier: BaseEstimator) -> Pipeline:
     Build an untrained pipeline: scaling and one-hot encoding
     followed by the given classifier
 
+    Preprocessing lives inside the pipeline, so it is fitted on the train
+    part only and is saved and loaded together with the classifier.
+    Columns outside the feature lists are dropped.
+
     :classifier: BaseEstimator - unfitted classifier
 
     :return: unfitted churn classification pipeline
@@ -160,7 +159,8 @@ def build_pipeline(classifier: BaseEstimator) -> Pipeline:
                 OneHotEncoder(handle_unknown="ignore"),
                 list(CATEGORICAL_FEATURES),
             ),
-        ]
+        ],
+        remainder="drop",
     )
 
     return Pipeline(

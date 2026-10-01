@@ -27,10 +27,16 @@ class FeatureVectorChurn(BaseModel):
     :device_type: str - main device type (mobile, desktop, tablet)
     :payment_method: str - payment method (card, paypal, crypto)
     :autopay_enabled: int - whether autopay is enabled (0 or 1)
+
+    Unknown fields are rejected, so a request with extra or misspelled
+    features fails instead of being silently trimmed. Types are strict:
+    a number sent as text or true/false sent as a number is an error.
     """
 
     model_config = ConfigDict(
         allow_inf_nan=False,
+        extra="forbid",
+        strict=True,
         json_schema_extra={"examples": [EXAMPLE_FEATURES]},
     )
 
@@ -50,9 +56,14 @@ class DatasetRowChurn(FeatureVectorChurn):
     Training dataset row: client features with the churn target
 
     :churn: int - target, 1 if the client left and 0 if stayed
+
+    Extra CSV columns, like a client id, are ignored. Types are not
+    strict here, because pandas may read whole numbers as 14.0.
     """
 
     model_config = ConfigDict(
+        extra="ignore",
+        strict=False,
         json_schema_extra={"examples": [{**EXAMPLE_FEATURES, "churn": 0}]},
     )
 

@@ -2,6 +2,7 @@ import logging
 import threading
 from pathlib import Path
 
+from itg_fastapi_churn.errors import ModelNotTrainedError
 from itg_fastapi_churn.ml.persistence import (
     ModelLoadError,
     TrainedModel,
@@ -40,6 +41,19 @@ class ModelStore:
         :return: current model, or None if there is none yet
         """
         return self._model
+
+    def require_current(self) -> TrainedModel:
+        """
+        Model kept in memory, for operations that cannot work without it
+
+        Raises ModelNotTrainedError while no model has been trained.
+
+        :return: current model
+        """
+        model = self._model
+        if model is None:
+            raise ModelNotTrainedError()
+        return model
 
     def load(self) -> None:
         """

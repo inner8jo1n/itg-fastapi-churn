@@ -36,7 +36,7 @@ def test_train_model_rejects_empty_dataset(
     response = client.post("/model/train")
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "Dataset is empty"
+    assert response.json()["code"] == "dataset_empty"
 
 
 def test_train_model_returns_404_when_file_missing(
@@ -49,7 +49,7 @@ def test_train_model_returns_404_when_file_missing(
     response = client.post("/model/train")
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Dataset file not found"
+    assert response.json()["code"] == "dataset_not_found"
 
 
 def test_train_model_rejects_single_class_dataset(
@@ -66,9 +66,8 @@ def test_train_model_rejects_single_class_dataset(
     response = client.post("/model/train")
 
     assert response.status_code == 409
-    assert (
-        response.json()["detail"] == "Dataset must contain both churn classes"
-    )
+    assert response.json()["code"] == "not_enough_data"
+    assert "both churn classes" in response.json()["message"]
 
 
 def test_train_model_rejects_too_small_dataset(
@@ -79,7 +78,8 @@ def test_train_model_rejects_too_small_dataset(
     response = client.post("/model/train")
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "Not enough rows to split the dataset"
+    assert response.json()["code"] == "not_enough_data"
+    assert "Not enough rows" in response.json()["message"]
 
 
 def test_status_reports_untrained_model(client: TestClient) -> None:
@@ -179,7 +179,8 @@ def test_train_rejects_bad_hyperparameters(
     )
 
     assert response.status_code == 422
-    assert wrong_name in response.json()["detail"]
+    assert response.json()["code"] == "invalid_hyperparameters"
+    assert wrong_name in response.json()["message"]
     assert not client.get("/model/status").json()["is_trained"]
 
 

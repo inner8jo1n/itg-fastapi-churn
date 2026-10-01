@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from itg_fastapi_churn.errors import ModelNotTrainedError
 from itg_fastapi_churn.ml.persistence import TrainedModel, load_churn_model
 from itg_fastapi_churn.ml.store import ModelStore
 
@@ -97,3 +98,19 @@ def test_status_shows_model_type_and_hyperparameters(
 
     assert status.model_type == trained_model.model_type
     assert status.hyperparameters == trained_model.hyperparameters
+
+
+def test_require_current_returns_model(
+    trained_model: TrainedModel, tmp_path: Path
+) -> None:
+    store = ModelStore(tmp_path / "model.joblib")
+    store.save(trained_model)
+
+    assert store.require_current() is trained_model
+
+
+def test_require_current_without_model_raises(tmp_path: Path) -> None:
+    store = ModelStore(tmp_path / "model.joblib")
+
+    with pytest.raises(ModelNotTrainedError):
+        store.require_current()

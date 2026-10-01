@@ -1,16 +1,17 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 
 from itg_fastapi_churn.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.dataset.loader import load_dataset
+from itg_fastapi_churn.errors import (
+    EmptyDatasetError,
+    NotEnoughDataError,
+)
 from itg_fastapi_churn.ml.features import prepare_data
-from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.ml.split import DatasetSplit, split_dataset
 from itg_fastapi_churn.ml.store import ModelStore
-
-MODEL_NOT_TRAINED = "Model is not trained yet, call POST /model/train first"
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -25,15 +26,7 @@ def get_dataset(
 
     :return: loaded churn dataset
     """
-    try:
-        data = load_dataset(settings.dataset_path)
-    except FileNotFoundError as error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset file not found",
-        ) from error
-
-    return ChurnDataset(data=data)
+    return ChurnDataset(data=load_dataset(settings.dataset_path))
 
 
 DatasetDep = Annotated[ChurnDataset, Depends(get_dataset)]
@@ -52,15 +45,13 @@ def get_split(dataset: DatasetDep, settings: SettingsDep) -> DatasetSplit:
     :return: stratified train/test split
     """
     if dataset.is_empty:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Dataset is empty"
-        )
+        raise EmptyDatasetError()
 
     features, target = prepare_data(dataset.data)
     if target.nunique() != 2:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Dataset must contain both churn classes",
+        raise NotEnoughDataError(
+            "Dataset must contain both churn classes",
+            details={"classes": [int(label) for label in target.unique()]},
         )
 
     try:
@@ -71,9 +62,9 @@ def get_split(dataset: DatasetDep, settings: SettingsDep) -> DatasetSplit:
             random_state=settings.random_state,
         )
     except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Not enough rows to split the dataset",
+        raise NotEnoughDataError(
+            "Not enough rows to split the dataset",
+            details={"rows": len(target)},
         ) from error
 
 
@@ -92,27 +83,3 @@ def get_model_store(request: Request) -> ModelStore:
 
 
 ModelStoreDep = Annotated[ModelStore, Depends(get_model_store)]
-
-
-def get_trained_model(store: ModelStoreDep) -> TrainedModel:
-    """
-    Give the current trained model to endpoints that need one
-
-    Responds with 409 Conflict while no model has been trained, so the
-    client knows to call POST /model/train first.
-
-    :store: ModelStore - application model store
-
-    :return: current trained model
-    """
-    model = store.current
-    if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=MODEL_NOT_TRAINED,
-        )
-
-    return model
-
-
-TrainedModelDep = Annotated[TrainedModel, Depends(get_trained_model)]

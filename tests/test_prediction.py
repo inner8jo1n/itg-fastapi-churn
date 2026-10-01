@@ -1,29 +1,19 @@
 import json
+from dataclasses import replace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from itg_fastapi_churn.api.dependencies import MODEL_NOT_TRAINED, get_dataset
-from itg_fastapi_churn.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
+from itg_fastapi_churn.ml.features import prepare_data
+from itg_fastapi_churn.ml.model import train_churn_model
+from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
 from itg_fastapi_churn.schemas.prediction import EXAMPLE_RESPONSE
 
 LOYAL_CLIENT = {**EXAMPLE_FEATURES, "failed_payments": 0}
 RISKY_CLIENT = {**EXAMPLE_FEATURES, "failed_payments": 5}
-
-
-@pytest.fixture
-def trained_client(
-    app: FastAPI, client: TestClient, training_dataset: ChurnDataset
-) -> TestClient:
-    app.dependency_overrides[get_dataset] = lambda: training_dataset
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        test_size=0.25, random_state=0
-    )
-    client.post("/model/train")
-    return client
 
 
 def test_predict_one_client(trained_client: TestClient) -> None:
@@ -66,7 +56,7 @@ def test_predict_without_trained_model(client: TestClient) -> None:
     response = client.post("/predict", json=EXAMPLE_FEATURES)
 
     assert response.status_code == 409
-    assert response.json()["detail"] == MODEL_NOT_TRAINED
+    assert response.json()["code"] == "model_not_trained"
 
 
 def test_predict_docs_show_request_examples(client: TestClient) -> None:
@@ -99,8 +89,25 @@ def test_predict_rejects_non_finite_numbers(
     assert response.status_code == 422
     [error] = [
         error
-        for error in response.json()["detail"]
+        for error in response.json()["details"]
         if error["type"] == "finite_number"
     ]
-    assert error["loc"][-1] == "monthly_fee"
+    assert error["location"][-1] == "monthly_fee"
     assert error["input"] == str(float(value))
+
+
+def test_predict_with_incompatible_model(
+    app: FastAPI,
+    client: TestClient,
+    training_dataset: ChurnDataset,
+    trained_model: TrainedModel,
+) -> None:
+    features, target = prepare_data(training_dataset.data)
+    pipeline = train_churn_model(features.assign(extra=0), target).pipeline
+    app.state.model_store.save(replace(trained_model, pipeline=pipeline))
+
+    response = client.post("/predict", json=EXAMPLE_FEATURES)
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "incompatible_model"
+    assert "retrain" in response.json()["message"]

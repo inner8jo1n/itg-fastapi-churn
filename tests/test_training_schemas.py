@@ -34,3 +34,8 @@ def test_config_rejects_unknown_model_type() -> None:
 
 def test_model_type_is_a_string() -> None:
     assert ModelType.RANDOM_FOREST == "random_forest"
+
+
+def test_config_rejects_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        TrainingConfigChurn.model_validate({"hyperparams": {"C": 0.1}})

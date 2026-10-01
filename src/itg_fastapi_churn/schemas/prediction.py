@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag
 from pydantic.json_schema import JsonDict
 
 from itg_fastapi_churn.schemas.churn import FeatureVectorChurn
@@ -17,7 +17,27 @@ ClientBatch = Annotated[
     list[FeatureVectorChurn],
     Field(min_length=1, max_length=MAX_CLIENTS_PER_REQUEST),
 ]
-PredictionRequestChurn = FeatureVectorChurn | ClientBatch
+
+
+def _request_shape(body: object) -> str:
+    """
+    Tell whether the request body is one client or a list of clients
+
+    Only the matching variant is validated, so errors never mention the
+    shape the client did not send.
+
+    :body: object - raw request body
+
+    :return: "clients" for a list, "client" otherwise
+    """
+    return "clients" if isinstance(body, list) else "client"
+
+
+PredictionRequestChurn = Annotated[
+    Annotated[FeatureVectorChurn, Tag("client")]
+    | Annotated[ClientBatch, Tag("clients")],
+    Discriminator(_request_shape),
+]
 
 
 class ChurnPrediction(BaseModel):

@@ -5,12 +5,15 @@ from fastapi import APIRouter, Body
 from fastapi.openapi.models import Example
 
 from itg_fastapi_churn.api.dependencies import ModelStoreDep, SplitDep
+from itg_fastapi_churn.api.error_docs import TRAIN_ERRORS
+from itg_fastapi_churn.ml.feature_schema import describe_features
 from itg_fastapi_churn.ml.metrics import evaluate_model
 from itg_fastapi_churn.ml.model import (
     resolve_hyperparameters,
     train_churn_model,
 )
 from itg_fastapi_churn.ml.persistence import TrainedModel
+from itg_fastapi_churn.schemas.feature_schema import ModelSchemaResponse
 from itg_fastapi_churn.schemas.model import ModelStatus, TrainingResponseChurn
 from itg_fastapi_churn.schemas.training import (
     LOGREG_CONFIG_EXAMPLE,
@@ -32,7 +35,7 @@ router = APIRouter(prefix="/model", tags=["model"])
 
 @router.post(
     "/train",
-    responses={422: {"description": "Unknown model or bad hyperparameters"}},
+    responses=TRAIN_ERRORS,
 )
 def train_model(
     split: SplitDep,
@@ -45,6 +48,8 @@ def train_model(
     Train the churn model, evaluate it on the test split and save it
 
     Without a request body logistic regression with defaults is trained.
+    Dataset problems are reported before problems in the request body,
+    because the dataset is loaded by a dependency.
 
     :split: DatasetSplit - stratified train/test split
     :store: ModelStore - where the trained model is kept
@@ -84,3 +89,18 @@ def get_model_status(store: ModelStoreDep) -> ModelStatus:
     :return: current model status
     """
     return store.status()
+
+
+@router.get("/schema")
+def get_model_schema(store: ModelStoreDep) -> ModelSchemaResponse:
+    """
+    List the features POST /predict expects, with types and limits
+
+    Categories seen by the model are included once it is trained.
+
+    :store: ModelStore - where the trained model is kept
+
+    :return: feature names, types, limits and known categories
+    """
+    model = store.current
+    return describe_features(model.pipeline if model else None)
