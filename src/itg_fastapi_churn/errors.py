@@ -97,6 +97,15 @@ class PredictionFailedError(ServiceError):
     default_message = "Model failed to make a prediction"
 
 
+class HistoryUnavailableError(ServiceError):
+    """
+    Training history file exists but cannot be read or written
+    """
+
+    code = "history_unavailable"
+    default_message = "Training history is unavailable"
+
+
 class InvalidHyperparametersError(ServiceError):
     """
     Hyperparameters do not fit the chosen classifier

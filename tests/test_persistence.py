@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import joblib
@@ -10,6 +11,7 @@ from itg_fastapi_churn.ml.persistence import (
     load_churn_model,
     save_churn_model,
 )
+from itg_fastapi_churn.schemas.model import ModelMetrics
 
 FEATURES = pd.DataFrame({"x": [0, 1]})
 
@@ -82,4 +84,29 @@ def test_load_rejects_model_saved_by_older_version(
     joblib.dump(old_model, path)
 
     with pytest.raises(ModelLoadError, match="model_type, hyperparameters"):
+        load_churn_model(path)
+
+
+def test_model_saved_before_roc_auc_gets_default(
+    trained_model: TrainedModel, tmp_path: Path
+) -> None:
+    path = tmp_path / "model.joblib"
+    old_metrics = ModelMetrics(accuracy=0.5, f1=0.4)
+    del old_metrics.__dict__["roc_auc"]
+    joblib.dump(replace(trained_model, metrics=old_metrics), path)
+
+    loaded = load_churn_model(path)
+
+    assert loaded is not None
+    assert loaded.metrics.roc_auc is None
+    assert loaded.metrics.f1 == 0.4
+
+
+def test_load_rejects_broken_metrics(
+    trained_model: TrainedModel, tmp_path: Path
+) -> None:
+    path = tmp_path / "model.joblib"
+    joblib.dump(replace(trained_model, metrics="not metrics"), path)
+
+    with pytest.raises(ModelLoadError, match="invalid metrics"):
         load_churn_model(path)

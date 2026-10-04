@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from pydantic import JsonValue
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 
@@ -136,6 +137,7 @@ def test_bool_is_accepted_for_bool_parameter() -> None:
     [
         (ModelType.RANDOM_FOREST, {"n_estimators": 1001}),
         (ModelType.LOGREG, {"max_iter": 10_001}),
+        (ModelType.RANDOM_FOREST, {"n_jobs": 17}),
     ],
 )
 def test_too_large_value_is_rejected(
@@ -147,6 +149,31 @@ def test_too_large_value_is_rejected(
 
     with pytest.raises(InvalidHyperparametersError, match="at most"):
         build_classifier(config)
+
+
+@pytest.mark.parametrize(
+    "hyperparameters",
+    [
+        {"C": float("inf")},
+        {"C": float("nan")},
+        {"class_weight": {"0": 1.0, "1": float("inf")}},
+        {"C": 2**63},
+        {"class_weight": {"0": 1, "1": -(2**63)}},
+    ],
+)
+def test_unsafe_number_is_rejected(
+    hyperparameters: dict[str, JsonValue],
+) -> None:
+    config = TrainingConfigChurn(hyperparameters=hyperparameters)
+
+    with pytest.raises(InvalidHyperparametersError, match="too large number"):
+        build_classifier(config)
+
+
+def test_largest_64_bit_integer_is_accepted() -> None:
+    config = TrainingConfigChurn(hyperparameters={"C": 2**63 - 1})
+
+    assert build_classifier(config).get_params()["C"] == 2**63 - 1
 
 
 def test_class_weight_keys_become_class_labels() -> None:

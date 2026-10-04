@@ -12,6 +12,7 @@ from itg_fastapi_churn.api.dependencies import get_dataset
 from itg_fastapi_churn.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.main import create_app
+from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.ml.store import ModelStore
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
@@ -23,6 +24,9 @@ from itg_fastapi_churn.schemas.training import ModelType
 def app(tmp_path: Path) -> FastAPI:
     application = create_app()
     application.state.model_store = ModelStore(tmp_path / "model.joblib")
+    application.state.training_history = TrainingHistory(
+        tmp_path / "history.jsonl"
+    )
     return application
 
 
@@ -75,12 +79,14 @@ def trained_model() -> TrainedModel:
 
 
 @pytest.fixture
-def trained_client(
-    app: FastAPI, client: TestClient, training_dataset: ChurnDataset
-) -> TestClient:
+def train_ready_app(app: FastAPI, training_dataset: ChurnDataset) -> None:
     app.dependency_overrides[get_dataset] = lambda: training_dataset
     app.dependency_overrides[get_settings] = lambda: Settings(
         test_size=0.25, random_state=0
     )
+
+
+@pytest.fixture
+def trained_client(train_ready_app: None, client: TestClient) -> TestClient:
     client.post("/model/train")
     return client

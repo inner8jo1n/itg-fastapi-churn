@@ -10,6 +10,7 @@ from itg_fastapi_churn.errors import (
     NotEnoughDataError,
 )
 from itg_fastapi_churn.ml.features import prepare_data
+from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.ml.split import DatasetSplit, split_dataset
 from itg_fastapi_churn.ml.store import ModelStore
 
@@ -83,3 +84,17 @@ def get_model_store(request: Request) -> ModelStore:
 
 
 ModelStoreDep = Annotated[ModelStore, Depends(get_model_store)]
+
+
+def get_training_history(request: Request) -> TrainingHistory:
+    """
+    Give access to the training history shared by the whole application
+
+    :request: Request - current request
+
+    :return: application training history
+    """
+    return request.app.state.training_history
+
+
+TrainingHistoryDep = Annotated[TrainingHistory, Depends(get_training_history)]

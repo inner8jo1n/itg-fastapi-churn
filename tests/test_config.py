@@ -13,6 +13,7 @@ def test_settings_use_defaults(
     monkeypatch.delenv("CHURN_TEST_SIZE", raising=False)
     monkeypatch.delenv("CHURN_RANDOM_STATE", raising=False)
     monkeypatch.delenv("CHURN_MODEL_PATH", raising=False)
+    monkeypatch.delenv("CHURN_HISTORY_PATH", raising=False)
 
     settings = Settings()
 
@@ -20,6 +21,7 @@ def test_settings_use_defaults(
     assert settings.test_size == 0.2
     assert settings.random_state == 42
     assert settings.model_path == Path("models/churn_model.joblib")
+    assert settings.history_path == Path("models/training_history.jsonl")
 
 
 def test_settings_read_dataset_path_from_env(

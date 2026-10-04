@@ -1,12 +1,19 @@
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 from fastapi.openapi.models import Example
 
-from itg_fastapi_churn.api.dependencies import ModelStoreDep, SplitDep
-from itg_fastapi_churn.api.error_docs import TRAIN_ERRORS
+from itg_fastapi_churn.api.dependencies import (
+    ModelStoreDep,
+    SplitDep,
+    TrainingHistoryDep,
+)
+from itg_fastapi_churn.api.error_docs import METRICS_ERRORS, TRAIN_ERRORS
+from itg_fastapi_churn.errors import HistoryUnavailableError
 from itg_fastapi_churn.ml.feature_schema import describe_features
+from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.ml.metrics import evaluate_model
 from itg_fastapi_churn.ml.model import (
     resolve_hyperparameters,
@@ -14,10 +21,15 @@ from itg_fastapi_churn.ml.model import (
 )
 from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.schemas.feature_schema import ModelSchemaResponse
+from itg_fastapi_churn.schemas.history import (
+    TrainingMetricsResponse,
+    TrainingRecord,
+)
 from itg_fastapi_churn.schemas.model import ModelStatus, TrainingResponseChurn
 from itg_fastapi_churn.schemas.training import (
     LOGREG_CONFIG_EXAMPLE,
     RANDOM_FOREST_CONFIG_EXAMPLE,
+    ModelType,
     TrainingConfigChurn,
 )
 
@@ -30,6 +42,10 @@ TRAINING_EXAMPLES = {
     ),
 }
 
+HISTORY_NOT_SAVED_WARNING = "Training was not added to the history"
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/model", tags=["model"])
 
 
@@ -40,12 +56,13 @@ router = APIRouter(prefix="/model", tags=["model"])
 def train_model(
     split: SplitDep,
     store: ModelStoreDep,
+    history: TrainingHistoryDep,
     config: Annotated[
         TrainingConfigChurn | None, Body(openapi_examples=TRAINING_EXAMPLES)
     ] = None,
 ) -> TrainingResponseChurn:
     """
-    Train the churn model, evaluate it on the test split and save it
+    Train the churn model, evaluate it, save it and add it to the history
 
     Without a request body logistic regression with defaults is trained.
     Dataset problems are reported before problems in the request body,
@@ -53,10 +70,11 @@ def train_model(
 
     :split: DatasetSplit - stratified train/test split
     :store: ModelStore - where the trained model is kept
+    :history: TrainingHistory - where finished trainings are recorded
     :config: TrainingConfigChurn | None - model type and hyperparameters
 
-    :return: accuracy and F1 score on the test split and training
-        warnings
+    :return: accuracy, F1 score and ROC AUC on the test split and
+        training warnings
     """
     if config is None:
         config = TrainingConfigChurn()
@@ -65,18 +83,44 @@ def train_model(
     metrics = evaluate_model(
         model=outcome.pipeline, features=split.x_test, target=split.y_test
     )
-    store.save(
-        TrainedModel(
-            pipeline=outcome.pipeline,
-            trained_at=datetime.now(UTC),
-            metrics=metrics,
-            model_type=config.model_type,
-            hyperparameters=resolve_hyperparameters(config),
-        )
+    trained = TrainedModel(
+        pipeline=outcome.pipeline,
+        trained_at=datetime.now(UTC),
+        metrics=metrics,
+        model_type=config.model_type,
+        hyperparameters=resolve_hyperparameters(config),
     )
-    return TrainingResponseChurn(
-        **metrics.model_dump(), warnings=outcome.warnings
+    store.save(trained)
+    warnings = outcome.warnings + _record_training(history, trained)
+    return TrainingResponseChurn(**metrics.model_dump(), warnings=warnings)
+
+
+def _record_training(
+    history: TrainingHistory, trained: TrainedModel
+) -> list[str]:
+    """
+    Add the training to the history without failing the request
+
+    The model is already saved, so a history problem is only logged and
+    reported to the client as a warning.
+
+    :history: TrainingHistory - where finished trainings are recorded
+    :trained: TrainedModel - model that has just been saved
+
+    :return: warning about the lost record, empty if it was added
+    """
+    record = TrainingRecord(
+        trained_at=trained.trained_at,
+        model_type=trained.model_type,
+        hyperparameters=trained.hyperparameters,
+        metrics=trained.metrics,
     )
+    try:
+        history.append(record)
+    except HistoryUnavailableError:
+        logger.exception(HISTORY_NOT_SAVED_WARNING)
+        return [HISTORY_NOT_SAVED_WARNING]
+    return []
 
 
 @router.get("/status")
@@ -89,6 +133,28 @@ def get_model_status(store: ModelStoreDep) -> ModelStatus:
     :return: current model status
     """
     return store.status()
+
+
+@router.get("/metrics", responses=METRICS_ERRORS)
+def get_model_metrics(
+    history: TrainingHistoryDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    model_type: ModelType | None = None,
+) -> TrainingMetricsResponse:
+    """
+    Show metrics of the latest training, the best one and recent ones
+
+    Compare the recent trainings to see which model settings work best.
+
+    :history: TrainingHistory - where finished trainings are recorded
+    :limit: int - how many recent trainings to list, from 1 to 100
+    :model_type: ModelType | None - show only this model type, all
+        trainings if not given
+
+    :return: latest, best by F1 and recent trainings
+    """
+    records = history.records(model_type)
+    return TrainingMetricsResponse.from_records(records, limit)
 
 
 @router.get("/schema")

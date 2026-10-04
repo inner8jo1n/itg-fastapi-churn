@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from itg_fastapi_churn.errors import (
     DatasetNotFoundError,
     EmptyDatasetError,
+    HistoryUnavailableError,
     IncompatibleModelError,
     InvalidDatasetError,
     InvalidHyperparametersError,
@@ -32,6 +33,7 @@ STATUS_BY_ERROR: dict[type[ServiceError], int] = {
     IncompatibleModelError: status.HTTP_409_CONFLICT,
     InvalidHyperparametersError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     PredictionFailedError: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    HistoryUnavailableError: status.HTTP_500_INTERNAL_SERVER_ERROR,
 }
 
 MAX_ECHOED_TEXT = 100

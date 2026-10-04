@@ -11,10 +11,15 @@ from sklearn.dummy import DummyClassifier
 from sklearn.pipeline import Pipeline
 
 from itg_fastapi_churn.api.dependencies import get_dataset
-from itg_fastapi_churn.api.error_docs import PREDICT_ERRORS, TRAIN_ERRORS
+from itg_fastapi_churn.api.error_docs import (
+    METRICS_ERRORS,
+    PREDICT_ERRORS,
+    TRAIN_ERRORS,
+)
 from itg_fastapi_churn.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.ml.features import FEATURE_COLUMNS
+from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
 from itg_fastapi_churn.schemas.error import ErrorResponse
@@ -134,6 +139,30 @@ PREDICT_SCENARIOS: dict[str, Scenario] = {
 }
 
 
+def unreadable_history(
+    app: FastAPI, client: TestClient, tmp: Path, model: TrainedModel
+) -> Response:
+    app.state.training_history = TrainingHistory(tmp)
+    return client.get("/model/metrics")
+
+
+METRICS_SCENARIOS: dict[str, Scenario] = {
+    "history_unavailable": unreadable_history,
+    "limit_out_of_range": lambda app, client, tmp, model: client.get(
+        "/model/metrics", params={"limit": 1000}
+    ),
+    "unknown_model_type": lambda app, client, tmp, model: client.get(
+        "/model/metrics", params={"model_type": "svm"}
+    ),
+}
+
+ROUTE_ERRORS = [
+    (TRAIN_ERRORS, TRAIN_SCENARIOS),
+    (PREDICT_ERRORS, PREDICT_SCENARIOS),
+    (METRICS_ERRORS, METRICS_SCENARIOS),
+]
+
+
 def documented_examples(
     responses: dict,
 ) -> dict[str, tuple[int, dict]]:
@@ -146,16 +175,17 @@ def documented_examples(
 
 
 @pytest.mark.parametrize(
-    ("path", "statuses"),
+    ("path", "method", "statuses"),
     [
-        ("/model/train", {"404", "409", "422", "500"}),
-        ("/predict", {"409", "422", "500"}),
+        ("/model/train", "post", {"404", "409", "422", "500"}),
+        ("/predict", "post", {"409", "422", "500"}),
+        ("/model/metrics", "get", {"422", "500"}),
     ],
 )
 def test_docs_list_error_statuses(
-    client: TestClient, path: str, statuses: set[str]
+    client: TestClient, path: str, method: str, statuses: set[str]
 ) -> None:
-    responses = client.get("/openapi.json").json()["paths"][path]["post"]
+    responses = client.get("/openapi.json").json()["paths"][path][method]
 
     assert statuses <= set(responses["responses"])
     for status in statuses:
@@ -165,16 +195,15 @@ def test_docs_list_error_statuses(
         )
 
 
-@pytest.mark.parametrize("responses", [TRAIN_ERRORS, PREDICT_ERRORS])
+@pytest.mark.parametrize(
+    "responses", [TRAIN_ERRORS, PREDICT_ERRORS, METRICS_ERRORS]
+)
 def test_every_example_is_a_valid_error_response(responses: dict) -> None:
     for _, body in documented_examples(responses).values():
         ErrorResponse.model_validate(body)
 
 
-@pytest.mark.parametrize(
-    ("responses", "scenarios"),
-    [(TRAIN_ERRORS, TRAIN_SCENARIOS), (PREDICT_ERRORS, PREDICT_SCENARIOS)],
-)
+@pytest.mark.parametrize(("responses", "scenarios"), ROUTE_ERRORS)
 def test_every_example_has_a_scenario(
     responses: dict, scenarios: dict[str, Scenario]
 ) -> None:
@@ -186,11 +215,9 @@ def test_every_example_has_a_scenario(
 @pytest.mark.parametrize(
     ("responses", "name", "scenario"),
     [
-        *[(TRAIN_ERRORS, name, run) for name, run in TRAIN_SCENARIOS.items()],
-        *[
-            (PREDICT_ERRORS, name, run)
-            for name, run in PREDICT_SCENARIOS.items()
-        ],
+        (responses, name, run)
+        for responses, scenarios in ROUTE_ERRORS
+        for name, run in scenarios.items()
     ],
 )
 def test_example_matches_real_response(

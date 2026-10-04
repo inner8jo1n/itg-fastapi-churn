@@ -9,6 +9,7 @@ from itg_fastapi_churn.api.errors import STATUS_BY_ERROR
 from itg_fastapi_churn.errors import (
     DatasetNotFoundError,
     EmptyDatasetError,
+    HistoryUnavailableError,
     IncompatibleModelError,
     InvalidDatasetError,
     InvalidHyperparametersError,
@@ -238,6 +239,39 @@ PREDICT_ERRORS = error_responses(
                 "message": "Input should be a valid number",
                 "type": "float_type",
                 "input": "19.99",
+            }
+        ],
+    ),
+    INTERNAL_ERROR,
+)
+
+METRICS_ERRORS = error_responses(
+    service_error_example(
+        HistoryUnavailableError,
+        "History file cannot be read, details are in the server log",
+        message="Training history cannot be read",
+    ),
+    validation_error_example(
+        "limit_out_of_range",
+        "Too many records requested",
+        [
+            {
+                "location": ["query", "limit"],
+                "message": "Input should be less than or equal to 100",
+                "type": "less_than_equal",
+                "input": "1000",
+            }
+        ],
+    ),
+    validation_error_example(
+        "unknown_model_type",
+        "Unknown model type",
+        [
+            {
+                "location": ["query", "model_type"],
+                "message": "Input should be 'logreg' or 'random_forest'",
+                "type": "enum",
+                "input": "svm",
             }
         ],
     ),

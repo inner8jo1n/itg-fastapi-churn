@@ -1,9 +1,9 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from pathlib import Path
 
 import joblib
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 from sklearn.pipeline import Pipeline
 
 from itg_fastapi_churn.schemas.model import ModelMetrics
@@ -87,4 +87,24 @@ def load_churn_model(path: Path) -> TrainedModel | None:
             f"missing: {', '.join(missing)}"
         )
 
-    return loaded
+    return _with_current_metrics(loaded, path)
+
+
+def _with_current_metrics(model: TrainedModel, path: Path) -> TrainedModel:
+    """
+    Re-validate saved metrics, so metrics added later get their defaults
+
+    A model saved before roc_auc existed has no such attribute at all;
+    validating its values again gives it roc_auc=None.
+
+    :model: TrainedModel - model read from the file
+    :path: Path - file the model came from, for the error message
+
+    :return: the same model with metrics of the current format
+    """
+    try:
+        metrics = ModelMetrics.model_validate(vars(model.metrics))
+    except (TypeError, ValidationError) as error:
+        message = f"Model file {path} has invalid metrics"
+        raise ModelLoadError(message) from error
+    return replace(model, metrics=metrics)

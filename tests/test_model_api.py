@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 from itg_fastapi_churn.api.dependencies import get_dataset
 from itg_fastapi_churn.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
+from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
 
 
@@ -115,6 +117,7 @@ def test_train_model_saves_model_and_updates_status(
     assert status["metrics"] == {
         "accuracy": trained["accuracy"],
         "f1": trained["f1"],
+        "roc_auc": trained["roc_auc"],
     }
 
 
@@ -129,14 +132,6 @@ def test_failed_training_keeps_model_untrained(
     status = client.get("/model/status").json()
 
     assert not status["is_trained"]
-
-
-@pytest.fixture
-def train_ready_app(app: FastAPI, training_dataset: ChurnDataset) -> None:
-    app.dependency_overrides[get_dataset] = lambda: training_dataset
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        test_size=0.25, random_state=0
-    )
 
 
 @pytest.mark.usefixtures("train_ready_app")
@@ -216,3 +211,74 @@ def test_train_without_problems_returns_no_warnings(
     response = client.post("/model/train")
 
     assert response.json()["warnings"] == []
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_adds_record_to_history(
+    app: FastAPI, client: TestClient
+) -> None:
+    config = {
+        "model_type": "random_forest",
+        "hyperparameters": {"n_estimators": 10},
+    }
+
+    trained = client.post("/model/train", json=config).json()
+    status = client.get("/model/status").json()
+
+    [record] = app.state.training_history.records()
+    assert record.trained_at.isoformat() == status["trained_at"].replace(
+        "Z", "+00:00"
+    )
+    assert record.model_type == "random_forest"
+    assert record.hyperparameters == status["hyperparameters"]
+    assert record.metrics.model_dump() == {
+        "accuracy": trained["accuracy"],
+        "f1": trained["f1"],
+        "roc_auc": trained["roc_auc"],
+    }
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_failed_training_is_not_added_to_history(
+    app: FastAPI, client: TestClient
+) -> None:
+    client.post("/model/train", json={"hyperparameters": {"C": -1}})
+
+    assert app.state.training_history.records() == []
+
+
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_warns_when_history_cannot_be_written(
+    app: FastAPI,
+    client: TestClient,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app.state.training_history = TrainingHistory(tmp_path)
+
+    with caplog.at_level(logging.ERROR):
+        response = client.post("/model/train")
+
+    assert response.status_code == 200
+    assert response.json()["warnings"] == [
+        "Training was not added to the history"
+    ]
+    assert client.get("/model/status").json()["is_trained"]
+    assert "Training was not added to the history" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "value", [b"1e309", b"NaN", b"-Infinity", b"1" + b"0" * 400]
+)
+@pytest.mark.usefixtures("train_ready_app")
+def test_train_rejects_unsafe_number_in_hyperparameter(
+    client: TestClient, value: bytes
+) -> None:
+    response = client.post(
+        "/model/train",
+        content=b'{"hyperparameters": {"C": ' + value + b"}}",
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_hyperparameters"

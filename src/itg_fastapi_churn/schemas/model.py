@@ -11,10 +11,13 @@ class ModelMetrics(BaseModel):
 
     :accuracy: float - share of correct predictions
     :f1: float - F1 score of the churn class (1)
+    :roc_auc: float | None - area under the ROC curve; None when the test
+        split has only one class and the score is undefined
     """
 
-    accuracy: float
-    f1: float
+    accuracy: float = Field(ge=0, le=1)
+    f1: float = Field(ge=0, le=1)
+    roc_auc: float | None = Field(default=None, ge=0, le=1)
 
 
 class TrainingResponseChurn(ModelMetrics):

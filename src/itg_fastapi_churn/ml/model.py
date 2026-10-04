@@ -1,4 +1,5 @@
 import logging
+import math
 import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -32,7 +33,12 @@ DEFAULT_HYPERPARAMETERS: dict[ModelType, dict[str, JsonValue]] = {
     },
 }
 
-UPPER_LIMITS: dict[str, int] = {"n_estimators": 1000, "max_iter": 10_000}
+UPPER_LIMITS: dict[str, int] = {
+    "n_estimators": 1000,
+    "max_iter": 10_000,
+    "n_jobs": 16,
+}
+LARGEST_INTEGER = 2**63 - 1
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +79,9 @@ def build_classifier(config: TrainingConfigChurn) -> BaseEstimator:
     Create the classifier chosen in the config
 
     Raises InvalidHyperparametersError if a hyperparameter name is unknown
-    to the classifier, a number is given as true/false or a value is
-    above the service limit.
+    to the classifier, a number is given as true/false, a value is
+    above the service limit or has a number that is infinite, NaN or
+    too large for a 64-bit integer.
 
     :config: TrainingConfigChurn - requested model and hyperparameters
 
@@ -114,6 +121,11 @@ def _prepare_value(
             f"The '{name}' parameter expects a value, not true/false"
         )
 
+    if not _has_safe_numbers(value):
+        raise InvalidHyperparametersError(
+            f"The '{name}' parameter has an infinite, NaN or too large number"
+        )
+
     limit = UPPER_LIMITS.get(name)
     is_number = isinstance(value, int | float)
     if limit is not None and is_number and value > limit:
@@ -125,6 +137,29 @@ def _prepare_value(
         return {_class_key(key): weight for key, weight in value.items()}
 
     return value
+
+
+def _has_safe_numbers(value: JsonValue) -> bool:
+    """
+    Tell whether every number inside a JSON value is safe for sklearn
+
+    JSON parsing turns 1e309 into infinity, which history and status
+    would show as null, and sklearn fails with OverflowError on integers
+    that do not fit into 64 bits.
+
+    :value: JsonValue - value from the request
+
+    :return: True if all floats are finite and all integers fit 64 bits
+    """
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, int):
+        return abs(value) <= LARGEST_INTEGER
+    if isinstance(value, dict):
+        return all(_has_safe_numbers(item) for item in value.values())
+    if isinstance(value, list):
+        return all(_has_safe_numbers(item) for item in value)
+    return True
 
 
 def _class_key(key: str) -> int | str:
