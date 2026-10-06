@@ -9,7 +9,7 @@ from sklearn.dummy import DummyClassifier
 from sklearn.pipeline import Pipeline
 
 from itg_fastapi_churn.api.dependencies import get_dataset
-from itg_fastapi_churn.config import Settings, get_settings
+from itg_fastapi_churn.core.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.main import create_app
 from itg_fastapi_churn.ml.history import TrainingHistory
@@ -18,6 +18,13 @@ from itg_fastapi_churn.ml.store import ModelStore
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
 from itg_fastapi_churn.schemas.model import ModelMetrics
 from itg_fastapi_churn.schemas.training import ModelType
+
+SAMPLE_DATASET_PATH = Path(__file__).parent / "data" / "churn_sample.csv"
+
+
+@pytest.fixture
+def sample_dataset_path() -> Path:
+    return SAMPLE_DATASET_PATH
 
 
 @pytest.fixture
@@ -28,6 +35,14 @@ def app(tmp_path: Path) -> FastAPI:
         tmp_path / "history.jsonl"
     )
     return application
+
+
+@pytest.fixture
+def sample_app(app: FastAPI, sample_dataset_path: Path) -> FastAPI:
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        dataset_path=sample_dataset_path
+    )
+    return app
 
 
 @pytest.fixture

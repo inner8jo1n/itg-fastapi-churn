@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from itg_fastapi_churn.errors import HistoryUnavailableError
+from itg_fastapi_churn.core.errors import HistoryUnavailableError
 from itg_fastapi_churn.schemas.history import TrainingRecord
 from itg_fastapi_churn.schemas.training import ModelType
 

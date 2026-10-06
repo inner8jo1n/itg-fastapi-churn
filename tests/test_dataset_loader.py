@@ -2,8 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from itg_fastapi_churn.dataset.loader import load_dataset
-from itg_fastapi_churn.errors import DatasetNotFoundError, InvalidDatasetError
+from itg_fastapi_churn.core.errors import (
+    DatasetNotFoundError,
+    EmptyDatasetError,
+    InvalidDatasetError,
+    ServiceError,
+)
+from itg_fastapi_churn.dataset.loader import check_dataset, load_dataset
 
 HEADER = (
     "monthly_fee,usage_hours,"
@@ -134,3 +139,62 @@ def test_load_dataset_rejects_binary_file(tmp_path: Path) -> None:
 
     with pytest.raises(InvalidDatasetError, match="not a valid CSV"):
         load_dataset(path)
+
+
+def test_check_accepts_valid_dataset(tmp_path: Path) -> None:
+    check_dataset(write_csv(tmp_path, VALID_ROW))
+
+
+def test_check_reads_only_the_first_row(tmp_path: Path) -> None:
+    path = write_csv(tmp_path, VALID_ROW, "bad,row")
+
+    check_dataset(path)
+
+    with pytest.raises(InvalidDatasetError):
+        load_dataset(path)
+
+
+@pytest.mark.parametrize(
+    ("content", "error"),
+    [
+        ("", EmptyDatasetError),
+        (HEADER, EmptyDatasetError),
+        ("monthly_fee,churn\n1,0", InvalidDatasetError),
+        ("monthly_fee\n", InvalidDatasetError),
+    ],
+)
+def test_check_rejects_unusable_content(
+    tmp_path: Path, content: str, error: type[ServiceError]
+) -> None:
+    path = tmp_path / "churn.csv"
+    path.write_text(content)
+
+    with pytest.raises(error):
+        check_dataset(path)
+
+
+@pytest.mark.parametrize(
+    "first_row",
+    [
+        "19.99,42.5",
+        "19.99,42.5,1,14,0,europe,mobile,card,1,0,7,8",
+        "19.99,42.5,1,14,0,europe,mobile,card,1,5",
+    ],
+)
+def test_check_rejects_invalid_first_row(
+    tmp_path: Path, first_row: str
+) -> None:
+    path = write_csv(tmp_path, first_row, VALID_ROW)
+
+    with pytest.raises(InvalidDatasetError):
+        check_dataset(path)
+
+
+def test_check_rejects_missing_file(tmp_path: Path) -> None:
+    with pytest.raises(DatasetNotFoundError):
+        check_dataset(tmp_path / "missing.csv")
+
+
+def test_check_rejects_directory(tmp_path: Path) -> None:
+    with pytest.raises(InvalidDatasetError):
+        check_dataset(tmp_path)

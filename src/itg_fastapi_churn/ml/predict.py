@@ -3,7 +3,7 @@ from collections.abc import Iterable
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
-from itg_fastapi_churn.errors import (
+from itg_fastapi_churn.core.errors import (
     IncompatibleModelError,
     PredictionFailedError,
 )

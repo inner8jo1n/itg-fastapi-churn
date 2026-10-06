@@ -1,3 +1,5 @@
+import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Body
@@ -32,6 +34,8 @@ REQUEST_EXAMPLES = {
     ),
 }
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["prediction"])
 
 
@@ -61,6 +65,12 @@ def predict(
     """
     model = store.require_current()
     batch = clients if isinstance(clients, list) else [clients]
-    return PredictionResponseChurn(
-        predictions=predict_churn(model.pipeline, batch)
+    started = time.perf_counter()
+    predictions = predict_churn(model.pipeline, batch)
+    logger.info(
+        "Predicted churn for %d clients in %.1f ms: %d likely to leave",
+        len(predictions),
+        (time.perf_counter() - started) * 1000,
+        sum(prediction.churn for prediction in predictions),
     )
+    return PredictionResponseChurn(predictions=predictions)

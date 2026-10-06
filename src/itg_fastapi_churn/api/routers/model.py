@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -11,7 +12,7 @@ from itg_fastapi_churn.api.dependencies import (
     TrainingHistoryDep,
 )
 from itg_fastapi_churn.api.error_docs import METRICS_ERRORS, TRAIN_ERRORS
-from itg_fastapi_churn.errors import HistoryUnavailableError
+from itg_fastapi_churn.core.errors import HistoryUnavailableError
 from itg_fastapi_churn.ml.feature_schema import describe_features
 from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.ml.metrics import evaluate_model
@@ -79,6 +80,8 @@ def train_model(
     if config is None:
         config = TrainingConfigChurn()
 
+    logger.info("Training %s model", config.model_type)
+    started = time.perf_counter()
     outcome = train_churn_model(split.x_train, split.y_train, config)
     metrics = evaluate_model(
         model=outcome.pipeline, features=split.x_test, target=split.y_test
@@ -91,6 +94,12 @@ def train_model(
         hyperparameters=resolve_hyperparameters(config),
     )
     store.save(trained)
+    logger.info(
+        "Model %s trained in %.2f s: %s",
+        config.model_type,
+        time.perf_counter() - started,
+        metrics,
+    )
     warnings = outcome.warnings + _record_training(history, trained)
     return TrainingResponseChurn(**metrics.model_dump(), warnings=warnings)
 

@@ -1,7 +1,7 @@
 [project]
 name = "itg-fastapi-churn"
 version = "0.1.0"
-description = "Add your description here"
+description = "FastAPI service that trains a churn model and predicts customer churn"
 readme = "README.md"
 authors = [
     { name = "imiderji", email = "skishou.developer@yandex.ru" }
@@ -26,6 +26,9 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = ["--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
 
 [tool.ruff]
 line-length = 79

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Runs all local checks (linter + formatter + type checker + tests) and
-# prints a green checkmark for each step that passes, or a red cross and
-# stops on the first failure.
+# Runs all local checks (linter + formatter + type checker + tests),
+# prints a green checkmark for each step that passes or a red cross with
+# the step output for each one that fails, and exits with 1 if any failed.
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'

@@ -2,13 +2,13 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from itg_fastapi_churn.config import Settings, get_settings
-from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
-from itg_fastapi_churn.dataset.loader import load_dataset
-from itg_fastapi_churn.errors import (
+from itg_fastapi_churn.core.config import Settings, get_settings
+from itg_fastapi_churn.core.errors import (
     EmptyDatasetError,
     NotEnoughDataError,
 )
+from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
+from itg_fastapi_churn.dataset.loader import load_dataset
 from itg_fastapi_churn.ml.features import prepare_data
 from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.ml.split import DatasetSplit, split_dataset

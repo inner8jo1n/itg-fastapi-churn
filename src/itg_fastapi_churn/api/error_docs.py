@@ -6,7 +6,7 @@ from fastapi import status
 from pydantic import JsonValue
 
 from itg_fastapi_churn.api.errors import STATUS_BY_ERROR
-from itg_fastapi_churn.errors import (
+from itg_fastapi_churn.core.errors import (
     DatasetNotFoundError,
     EmptyDatasetError,
     HistoryUnavailableError,

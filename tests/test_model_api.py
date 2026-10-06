@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from itg_fastapi_churn.api.dependencies import get_dataset
-from itg_fastapi_churn.config import Settings, get_settings
+from itg_fastapi_churn.core.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES

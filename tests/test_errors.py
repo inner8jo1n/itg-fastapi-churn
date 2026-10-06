@@ -1,19 +1,30 @@
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from pydantic import JsonValue
 from sklearn.dummy import DummyClassifier
 from sklearn.pipeline import Pipeline
+from starlette.requests import Request
 
-from itg_fastapi_churn.config import Settings, get_settings
-from itg_fastapi_churn.errors import ServiceError
+from itg_fastapi_churn.api.errors import (
+    MAX_ECHOED_FIELDS,
+    http_error_handler,
+    service_error_handler,
+    validation_error_handler,
+)
+from itg_fastapi_churn.core.config import Settings, get_settings
+from itg_fastapi_churn.core.errors import ServiceError
 from itg_fastapi_churn.ml.persistence import TrainedModel
 from itg_fastapi_churn.schemas.churn import EXAMPLE_FEATURES
+
+Handler = Callable[[Request, Exception], Awaitable[JSONResponse]]
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +56,7 @@ def test_wrong_method_keeps_allow_header(client: TestClient) -> None:
     assert response.headers["allow"] == "POST"
 
 
+@pytest.mark.usefixtures("sample_app")
 def test_validation_error_lists_invalid_fields(client: TestClient) -> None:
     response = client.get("/dataset/preview", params={"n": 0})
 
@@ -74,6 +86,20 @@ def test_unexpected_error_hides_traceback(
     }
     assert "secret internal detail" not in response.text
     assert "secret internal detail" in caplog.text
+
+
+def test_unexpected_error_does_not_reach_the_server(
+    app: FastAPI, caplog: pytest.LogCaptureFixture
+) -> None:
+    @app.get("/boom")
+    def boom() -> None:
+        raise RuntimeError("secret internal detail")
+
+    response = TestClient(app).get("/boom")
+
+    assert response.status_code == 500
+    [record] = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert record.getMessage() == "GET /boom failed with an unexpected error"
 
 
 def test_service_error_without_known_status_is_500(app: FastAPI) -> None:
@@ -191,3 +217,44 @@ def test_unknown_http_status_gets_generic_code(app: FastAPI) -> None:
 
     assert response.status_code == 599
     assert response.json()["code"] == "http_error"
+
+
+def test_echoed_large_object_is_described(trained_client: TestClient) -> None:
+    extra = {f"field_{index}": 0 for index in range(MAX_ECHOED_FIELDS)}
+    payload = {
+        **{k: v for k, v in EXAMPLE_FEATURES.items() if k != "region"},
+        **extra,
+    }
+
+    response = trained_client.post("/predict", json=payload)
+
+    [missing] = [
+        item
+        for item in response.json()["details"]
+        if item["type"] == "missing"
+    ]
+    assert missing["input"] == f"object with {len(payload)} fields"
+
+
+@pytest.mark.parametrize(
+    "handler",
+    [service_error_handler, http_error_handler, validation_error_handler],
+)
+async def test_handler_answers_500_for_foreign_error(
+    handler: Handler, caplog: pytest.LogCaptureFixture
+) -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/model/status",
+            "query_string": b"",
+            "headers": [],
+        }
+    )
+
+    response = await handler(request, RuntimeError("foreign"))
+
+    assert response.status_code == 500
+    assert b"internal_error" in response.body
+    assert "GET /model/status failed with an unexpected error" in caplog.text

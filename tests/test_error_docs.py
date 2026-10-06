@@ -16,7 +16,7 @@ from itg_fastapi_churn.api.error_docs import (
     PREDICT_ERRORS,
     TRAIN_ERRORS,
 )
-from itg_fastapi_churn.config import Settings, get_settings
+from itg_fastapi_churn.core.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.ml.features import FEATURE_COLUMNS
 from itg_fastapi_churn.ml.history import TrainingHistory

@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 from pydantic import JsonValue
@@ -39,6 +40,27 @@ def test_train_churn_model_learns_obvious_pattern() -> None:
     model = train_churn_model(features, target).pipeline
 
     assert list(model.predict(features)) == list(target)
+
+
+def test_unknown_category_does_not_break_prediction() -> None:
+    features, target = make_training_data()
+    model = train_churn_model(features, target).pipeline
+
+    unseen = features.head(1).assign(region="antarctica")
+
+    assert model.predict_proba(unseen).shape == (1, 2)
+
+
+def test_extra_columns_are_not_used_for_training() -> None:
+    features, target = make_training_data()
+    with_extra = features.assign(customer_id=range(len(features)))
+
+    plain = train_churn_model(features, target).pipeline
+    extra = train_churn_model(with_extra, target).pipeline
+
+    assert np.array_equal(
+        extra.predict_proba(with_extra), plain.predict_proba(features)
+    )
 
 
 @pytest.mark.parametrize(
@@ -159,6 +181,7 @@ def test_too_large_value_is_rejected(
         {"class_weight": {"0": 1.0, "1": float("inf")}},
         {"C": 2**63},
         {"class_weight": {"0": 1, "1": -(2**63)}},
+        {"C": [1.0, float("inf")]},
     ],
 )
 def test_unsafe_number_is_rejected(

@@ -2,7 +2,7 @@ import logging
 import threading
 from pathlib import Path
 
-from itg_fastapi_churn.errors import ModelNotTrainedError
+from itg_fastapi_churn.core.errors import ModelNotTrainedError
 from itg_fastapi_churn.ml.persistence import (
     ModelLoadError,
     TrainedModel,
@@ -67,6 +67,17 @@ class ModelStore:
         except ModelLoadError:
             logger.warning("Saved model is ignored", exc_info=True)
             self._model = None
+            return
+
+        if self._model is None:
+            logger.info("No saved model at %s, train one first", self._path)
+        else:
+            logger.info(
+                "Model %s trained at %s loaded from %s",
+                self._model.model_type,
+                self._model.trained_at.isoformat(),
+                self._path,
+            )
 
     def save(self, model: TrainedModel) -> None:
         """

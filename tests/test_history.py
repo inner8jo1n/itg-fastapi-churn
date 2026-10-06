@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from itg_fastapi_churn.errors import HistoryUnavailableError
+from itg_fastapi_churn.core.errors import HistoryUnavailableError
 from itg_fastapi_churn.ml.history import TrainingHistory
 from itg_fastapi_churn.schemas.history import (
     TrainingMetricsResponse,
@@ -116,6 +116,30 @@ def test_records_with_equal_time_keep_newest_append_first(
     scores = [record.metrics.f1 for record in history.records()]
 
     assert scores == [0.2, 0.1]
+
+
+def test_blank_lines_are_not_reported_as_damaged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = tmp_path / "history.jsonl"
+    history = TrainingHistory(path)
+    history.append(make_record(1))
+    with path.open("a", encoding="utf-8") as file:
+        file.write("\n  \n")
+
+    assert len(history.records()) == 1
+    assert "Damaged" not in caplog.text
+
+
+def test_append_to_existing_empty_file(tmp_path: Path) -> None:
+    path = tmp_path / "history.jsonl"
+    path.touch()
+    history = TrainingHistory(path)
+
+    history.append(make_record(1))
+
+    assert path.read_text(encoding="utf-8").count("\n") == 1
+    assert len(history.records()) == 1
 
 
 def test_broken_encoding_skips_only_its_line(tmp_path: Path) -> None:

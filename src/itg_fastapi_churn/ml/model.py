@@ -13,7 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from itg_fastapi_churn.errors import InvalidHyperparametersError
+from itg_fastapi_churn.core.errors import InvalidHyperparametersError
 from itg_fastapi_churn.ml.features import (
     CATEGORICAL_FEATURES,
     NUMERIC_FEATURES,

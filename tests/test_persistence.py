@@ -57,7 +57,7 @@ def test_load_rejects_unexpected_object(tmp_path: Path) -> None:
     path = tmp_path / "model.joblib"
     joblib.dump({"not": "a model"}, path)
 
-    with pytest.raises(ModelLoadError):
+    with pytest.raises(ModelLoadError, match="unexpected content"):
         load_churn_model(path)
 
 

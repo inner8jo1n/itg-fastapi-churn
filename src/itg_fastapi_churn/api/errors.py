@@ -6,11 +6,12 @@ from http import HTTPStatus
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import JsonValue
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import RequestResponseEndpoint
 
-from itg_fastapi_churn.errors import (
+from itg_fastapi_churn.core.errors import (
     DatasetNotFoundError,
     EmptyDatasetError,
     HistoryUnavailableError,
@@ -47,6 +48,10 @@ def register_error_handlers(application: FastAPI) -> None:
     """
     Make every error answer with the common ErrorResponse format
 
+    Unexpected errors are caught by a middleware, not by an exception
+    handler: Starlette re-raises an error after its handler, and the
+    server would log the same traceback a second time.
+
     :application: FastAPI - application to configure
     """
     application.add_exception_handler(ServiceError, service_error_handler)
@@ -56,44 +61,71 @@ def register_error_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         RequestValidationError, validation_error_handler
     )
-    application.add_exception_handler(Exception, unexpected_error_handler)
+    application.middleware("http")(catch_unexpected_errors)
+
+
+async def catch_unexpected_errors(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
+    """
+    Answer any error no handler took care of with a neat 500
+
+    :request: Request - incoming request
+    :call_next: RequestResponseEndpoint - rest of the application
+
+    :return: the normal response, or 500 if the request failed
+    """
+    try:
+        return await call_next(request)
+    except Exception as error:
+        return await unexpected_error_handler(request, error)
 
 
 async def service_error_handler(
-    _request: Request, error: Exception
+    request: Request, error: Exception
 ) -> JSONResponse:
     """
     Answer an expected service error with its code and message
 
-    :_request: Request - failed request, not used
+    :request: Request - failed request, named in the log
     :error: Exception - ServiceError raised by the service
 
     :return: error response with the status that fits the error
     """
     if not isinstance(error, ServiceError):
-        return await unexpected_error_handler(_request, error)
+        return await unexpected_error_handler(request, error)
 
     status_code = _status_for(error)
     if status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
-        logger.error("Service error %s", error.code, exc_info=error)
+        logger.error(
+            "%s failed with %s", _describe(request), error.code, exc_info=error
+        )
+    else:
+        logger.warning(
+            "%s failed with %s: %s",
+            _describe(request),
+            error.code,
+            error.message,
+        )
     return error_response(
         status_code, error.code, error.message, error.details
     )
 
 
 async def http_error_handler(
-    _request: Request, error: Exception
+    request: Request, error: Exception
 ) -> JSONResponse:
     """
     Answer framework HTTP errors, like an unknown path, in common format
 
-    :_request: Request - failed request, not used
+    :request: Request - failed request, passed on if the error is not
+        an HTTP one
     :error: Exception - HTTPException raised by FastAPI or Starlette
 
     :return: error response with the original status and headers
     """
     if not isinstance(error, StarletteHTTPException):
-        return await unexpected_error_handler(_request, error)
+        return await unexpected_error_handler(request, error)
 
     code = _http_code(error.status_code)
     return error_response(
@@ -102,7 +134,7 @@ async def http_error_handler(
 
 
 async def validation_error_handler(
-    _request: Request, error: Exception
+    request: Request, error: Exception
 ) -> JSONResponse:
     """
     Answer 422 listing the invalid fields of the request
@@ -111,15 +143,18 @@ async def validation_error_handler(
     thousands of mistakes still gets a small answer; the message tells
     how many problems there are in total.
 
-    :_request: Request - request that failed validation, not used
+    :request: Request - request that failed validation, named in the log
     :error: Exception - RequestValidationError raised by FastAPI
 
     :return: 422 response with one entry per invalid field
     """
     if not isinstance(error, RequestValidationError):
-        return await unexpected_error_handler(_request, error)
+        return await unexpected_error_handler(request, error)
 
     errors = error.errors()
+    logger.warning(
+        "%s rejected: %d invalid fields", _describe(request), len(errors)
+    )
     details: list[JsonValue] = [
         {
             "location": list(item["loc"]),
@@ -144,17 +179,21 @@ async def validation_error_handler(
 
 
 async def unexpected_error_handler(
-    _request: Request, error: Exception
+    request: Request, error: Exception
 ) -> JSONResponse:
     """
     Hide unexpected failures behind a neat 500 and log the traceback
 
-    :_request: Request - failed request, not used
+    :request: Request - failed request, named in the log
     :error: Exception - any error the service did not expect
 
     :return: 500 response without technical details
     """
-    logger.error("Unexpected error", exc_info=error)
+    logger.error(
+        "%s failed with an unexpected error",
+        _describe(request),
+        exc_info=error,
+    )
     return error_response(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         "internal_error",
@@ -189,6 +228,20 @@ def error_response(
         content=_json_safe(body.model_dump(mode="json")),
         headers=dict(headers) if headers else None,
     )
+
+
+def _describe(request: Request) -> str:
+    """
+    Name the request in a log message without its body or query
+
+    The body and query may hold client data, so only the method and the
+    path are logged.
+
+    :request: Request - request being answered
+
+    :return: text like "POST /predict"
+    """
+    return f"{request.method} {request.url.path}"
 
 
 def _short_input(value: JsonValue) -> JsonValue:

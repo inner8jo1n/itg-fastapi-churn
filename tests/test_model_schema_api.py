@@ -10,7 +10,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 from itg_fastapi_churn.api.dependencies import get_dataset
-from itg_fastapi_churn.config import Settings, get_settings
+from itg_fastapi_churn.core.config import Settings, get_settings
 from itg_fastapi_churn.dataset.churn_dataset import ChurnDataset
 from itg_fastapi_churn.ml.features import FEATURE_COLUMNS, prepare_data
 from itg_fastapi_churn.ml.persistence import TrainedModel

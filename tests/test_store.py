@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from itg_fastapi_churn.errors import ModelNotTrainedError
+from itg_fastapi_churn.core.errors import ModelNotTrainedError
 from itg_fastapi_churn.ml.persistence import TrainedModel, load_churn_model
 from itg_fastapi_churn.ml.store import ModelStore
 

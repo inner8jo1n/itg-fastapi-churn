@@ -32,6 +32,14 @@ def test_class_distribution_counts_rows_per_class() -> None:
     assert distribution == {0: 2, 1: 1}
 
 
+def test_class_distribution_is_ordered_by_class() -> None:
+    target = pd.Series([1, 1, 0])
+
+    distribution = class_distribution(target)
+
+    assert list(distribution) == [0, 1]
+
+
 def test_prepare_data_separates_features_and_target() -> None:
     data = pd.DataFrame(
         [{**EXAMPLE_FEATURES, "churn": 0}, {**EXAMPLE_FEATURES, "churn": 1}]
